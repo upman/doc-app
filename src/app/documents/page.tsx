@@ -9,6 +9,9 @@ interface Document {
   filename?: string | null;
   upload_date?: string | null;
   file_size?: number | null;
+  // Backend actually returns these fields:
+  size?: number | null;
+  modified?: number | null;
 }
 
 export default function DocumentsPage() {
@@ -39,7 +42,19 @@ export default function DocumentsPage() {
           setDocuments(validDocuments);
         } else if (typeof data === 'object' && data.documents && Array.isArray(data.documents)) {
           // Handle case where documents are nested in a wrapper object
-          const validDocuments = data.documents.filter((doc: any) => doc !== null && doc !== undefined);
+          const validDocuments = data.documents
+            .filter((doc: any) => doc !== null && doc !== undefined)
+            .map((doc: any, index: number) => ({
+              // Generate a unique ID since backend doesn't provide one
+              id: doc.filename || `doc-${index}`,
+              filename: doc.filename,
+              // Map backend fields to frontend expectations
+              file_size: doc.size,
+              upload_date: doc.modified ? new Date(doc.modified * 1000).toISOString() : null,
+              // Keep original fields as backup
+              size: doc.size,
+              modified: doc.modified
+            }));
           setDocuments(validDocuments);
         } else {
           console.warn('API returned unexpected data format:', data);
