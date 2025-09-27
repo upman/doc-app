@@ -1,0 +1,180 @@
+.container {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #e9ecef;
+}
+
+.header h1 {
+  margin: 0;
+  color: #333;
+  font-size: 2rem;
+}
+
+.refreshButton {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background-color 0.2s;
+}
+
+.refreshButton:hover {
+  background: #0056b3;
+}
+
+.loading {
+  text-align: center;
+  padding: 4rem 2rem;
+  font-size: 1.1rem;
+  color: #666;
+}
+
+.error {
+  text-align: center;
+  padding: 2rem;
+  color: #dc3545;
+  background: #f8d7da;
+  border: 1px solid #f5c6cb;
+  border-radius: 0.375rem;
+  margin: 1rem 0;
+}
+
+.retryButton {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  margin-top: 1rem;
+}
+
+.retryButton:hover {
+  background: #c82333;
+}
+
+.empty {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: #666;
+}
+
+.empty p {
+  margin: 0.5rem 0;
+  font-size: 1.1rem;
+}
+
+.documentsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+.documentCard {
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s, box-shadow 0.2s;
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.documentCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.documentIcon {
+  font-size: 2rem;
+  flex-shrink: 0;
+}
+
+.documentInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.documentName {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #333;
+  word-break: break-word;
+}
+
+.documentMeta {
+  margin: 0.25rem 0;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+@media (prefers-color-scheme: dark) {
+  .header h1 {
+    color: #ffffff;
+  }
+
+  .header {
+    border-bottom-color: #333;
+  }
+
+  .documentCard {
+    background: #2d2d2d;
+    border-color: #444;
+    color: #ffffff;
+  }
+
+  .documentName {
+    color: #ffffff;
+  }
+
+  .documentMeta {
+    color: #ccc;
+  }
+
+  .empty {
+    color: #ccc;
+  }
+
+  .loading {
+    color: #ccc;
+  }
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 1rem;
+  }
+
+  .header {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+
+  .documentsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .documentCard {
+    padding: 1rem;
+  }
+}

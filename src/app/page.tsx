@@ -9,6 +9,7 @@ export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
   const [uploadMessage, setUploadMessage] = useState<string>('');
+  const [questions, setQuestions] = useState<string[]>(['']);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -18,8 +19,29 @@ export default function Home() {
     }
   };
 
+  const handleQuestionChange = (index: number, value: string) => {
+    const updatedQuestions = [...questions];
+    updatedQuestions[index] = value;
+    setQuestions(updatedQuestions);
+  };
+
+  const addQuestion = () => {
+    setQuestions([...questions, '']);
+  };
+
+  const removeQuestion = (index: number) => {
+    if (questions.length > 1) {
+      const updatedQuestions = questions.filter((_, i) => i !== index);
+      setQuestions(updatedQuestions);
+    }
+  };
+
+  const hasValidQuestions = () => {
+    return questions.some(question => question.trim() !== '');
+  };
+
   const handleUpload = async () => {
-    if (!file) return;
+    if (!file || !hasValidQuestions()) return;
 
     setUploadStatus('uploading');
     setUploadMessage('Uploading...');
@@ -27,6 +49,10 @@ export default function Home() {
     try {
       const formData = new FormData();
       formData.append('file', file);
+
+      // Add questions to the form data
+      const validQuestions = questions.filter(q => q.trim() !== '');
+      formData.append('questions', JSON.stringify(validQuestions));
 
       const response = await fetch(getApiUrl('/documents/upload'), {
         method: 'POST',
@@ -51,18 +77,11 @@ export default function Home() {
   return (
     <div className={styles.page}>
       <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
 
         {/* File Upload Form */}
         <div style={{ margin: '2rem 0', padding: '1rem', border: '1px solid #ccc', borderRadius: '8px', background: '#f9f9f9' }}>
           <h2 style={{ marginBottom: '1rem', color: "black" }}>Upload Document</h2>
+
           <div style={{ marginBottom: '1rem' }}>
             <input
               type="file"
@@ -70,20 +89,82 @@ export default function Home() {
               style={{ marginBottom: '1rem', padding: '0.5rem' }}
             />
           </div>
+
+          {/* Questions Section */}
+          <div style={{ marginBottom: '1rem' }}>
+            <h3 style={{ marginBottom: '0.5rem', color: "black" }}>Questions (at least 1 required)</h3>
+            {questions.map((question, index) => (
+              <div key={index} style={{ display: 'flex', marginBottom: '0.5rem', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  value={question}
+                  onChange={(e) => handleQuestionChange(index, e.target.value)}
+                  placeholder={`Question ${index + 1}`}
+                  style={{
+                    flex: 1,
+                    padding: '0.5rem',
+                    borderRadius: '4px',
+                    border: '1px solid #ccc',
+                    marginRight: '0.5rem'
+                  }}
+                />
+                {questions.length > 1 && (
+                  <button
+                    onClick={() => removeQuestion(index)}
+                    style={{
+                      padding: '0.5rem',
+                      backgroundColor: '#dc3545',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            ))}
+            <button
+              onClick={addQuestion}
+              style={{
+                padding: '0.5rem 1rem',
+                backgroundColor: '#28a745',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                marginTop: '0.5rem'
+              }}
+            >
+              Add Question
+            </button>
+          </div>
+
           <button
             onClick={handleUpload}
-            disabled={!file || uploadStatus === 'uploading'}
+            disabled={!file || uploadStatus === 'uploading' || !hasValidQuestions()}
             style={{
               padding: '0.5rem 1rem',
-              backgroundColor: file && uploadStatus !== 'uploading' ? '#0070f3' : '#ccc',
+              backgroundColor: file && uploadStatus !== 'uploading' && hasValidQuestions() ? '#0070f3' : '#ccc',
               color: 'white',
               border: 'none',
               borderRadius: '4px',
-              cursor: file && uploadStatus !== 'uploading' ? 'pointer' : 'not-allowed'
+              cursor: file && uploadStatus !== 'uploading' && hasValidQuestions() ? 'pointer' : 'not-allowed'
             }}
           >
             {uploadStatus === 'uploading' ? 'Uploading...' : 'Upload File'}
           </button>
+
+          {!hasValidQuestions() && (
+            <div style={{
+              marginTop: '0.5rem',
+              color: '#dc3545',
+              fontSize: '0.9rem'
+            }}>
+              Please add at least one question before uploading.
+            </div>
+          )}
 
           {uploadMessage && (
             <div style={{
@@ -98,84 +179,7 @@ export default function Home() {
             </div>
           )}
         </div>
-
-        <ol>
-          <li>
-            Get started by editing <code>src/app/page.tsx</code>.
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
-
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.secondary}
-          >
-            Read our docs
-          </a>
-        </div>
       </main>
-      <footer className={styles.footer}>
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
     </div>
   );
 }
