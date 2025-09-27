@@ -99,24 +99,35 @@ class DatabaseManager:
                 raise RuntimeError("Failed to create question result: no ID returned")
             return result_id
 
-    def get_all_extractions(self) -> List[Dict[str, Any]]:
-        """Get all extractions with their question results"""
+    def get_all_extractions(self, page: int = 1, page_size: int = 10) -> Dict[str, Any]:
+        """Get all extractions with their question results, with pagination"""
         with self.get_connection() as conn:
-            # Get extractions
+            # Calculate offset
+            offset = (page - 1) * page_size
+
+            # Get total count
+            count_cursor = conn.execute("SELECT COUNT(*) as total FROM extractions")
+            total_count = count_cursor.fetchone()["total"]
+
+            # Get extractions with pagination
             extractions_cursor = conn.execute(
                 """
                 SELECT id, file_path, filename, file_size, questions, status, markdown_content, created_at, updated_at
                 FROM extractions
                 ORDER BY created_at DESC
-                """
+                LIMIT ? OFFSET ?
+                """,
+                (page_size, offset)
             )
             extractions = []
 
             for row in extractions_cursor:
+                # Extract just the filename from the path
+                filename = Path(row["filename"]).name if row["filename"] else "Unknown"
+
                 extraction = {
                     "id": row["id"],
-                    "file_path": row["file_path"],
-                    "filename": row["filename"],
+                    "filename": filename,  # Show just the filename, not the full path
                     "file_size": row["file_size"],
                     "questions": json.loads(row["questions"]) if row["questions"] else [],
                     "status": row["status"],
@@ -147,15 +158,75 @@ class DatabaseManager:
 
                 extractions.append(extraction)
 
-            return extractions
+            # Calculate pagination info
+            total_pages = (total_count + page_size - 1) // page_size
+            has_next = page < total_pages
+            has_prev = page > 1
+
+            return {
+                "extractions": extractions,
+                "pagination": {
+                    "page": page,
+                    "page_size": page_size,
+                    "total_count": total_count,
+                    "total_pages": total_pages,
+                    "has_next": has_next,
+                    "has_prev": has_prev
+                }
+            }
 
     def get_extraction_by_id(self, extraction_id: int) -> Optional[Dict[str, Any]]:
         """Get a specific extraction by ID"""
-        extractions = self.get_all_extractions()
-        for extraction in extractions:
-            if extraction["id"] == extraction_id:
-                return extraction
-        return None
+        with self.get_connection() as conn:
+            # Get the specific extraction
+            extraction_cursor = conn.execute(
+                """
+                SELECT id, file_path, filename, file_size, questions, status, markdown_content, created_at, updated_at
+                FROM extractions
+                WHERE id = ?
+                """,
+                (extraction_id,)
+            )
+            row = extraction_cursor.fetchone()
+
+            if not row:
+                return None
+
+            # Extract just the filename from the path
+            filename = Path(row["filename"]).name if row["filename"] else "Unknown"
+
+            extraction = {
+                "id": row["id"],
+                "filename": filename,  # Show just the filename, not the full path
+                "file_size": row["file_size"],
+                "questions": json.loads(row["questions"]) if row["questions"] else [],
+                "status": row["status"],
+                "markdown_content": row["markdown_content"],
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+                "results": []
+            }
+
+            # Get question results for this extraction
+            results_cursor = conn.execute(
+                """
+                SELECT question, answer, confidence, created_at
+                FROM question_results
+                WHERE extraction_id = ?
+                ORDER BY created_at ASC
+                """,
+                (extraction_id,)
+            )
+
+            for result_row in results_cursor:
+                extraction["results"].append({
+                    "question": result_row["question"],
+                    "answer": result_row["answer"],
+                    "confidence": result_row["confidence"],
+                    "created_at": result_row["created_at"]
+                })
+
+            return extraction
 
 
 # Global database manager instance

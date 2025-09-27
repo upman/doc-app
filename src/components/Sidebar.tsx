@@ -31,6 +31,15 @@ export default function Sidebar() {
             View Documents
           </Link>
         </li>
+        <li>
+          <Link
+            href="/extractions"
+            className={`${styles.sidebarLink} ${pathname === '/extractions' ? styles.active : ''}`}
+          >
+            <span className={styles.icon}>📊</span>
+            View Extractions
+          </Link>
+        </li>
       </ul>
     </nav>
   );

@@ -79,7 +79,7 @@ async def process_document_background(extraction_id: int, file_path: Path, quest
             return
 
         # Update extraction with markdown content
-        if markdown_content:
+        if (markdown_content):
             db_manager.update_extraction_status(extraction_id, "completed", markdown_content)
             logger.info(f"   ✅ Markdown content saved to database")
         else:
@@ -315,20 +315,31 @@ async def get_document(document_id: str):
     )
 
 @app.get("/extractions")
-async def get_extractions():
+async def get_extractions(page: int = 1, page_size: int = 10):
     """
-    Get all document extractions from the database
+    Get all document extractions from the database with pagination
+
+    Parameters:
+    - page: Page number (default: 1)
+    - page_size: Number of items per page (default: 10, max: 100)
     """
-    logger.info("Received request to get all extractions")
+    logger.info(f"Received request to get extractions - page: {page}, page_size: {page_size}")
+
+    # Validate pagination parameters
+    if page < 1:
+        raise HTTPException(status_code=400, detail="Page number must be >= 1")
+
+    if page_size < 1 or page_size > 100:
+        raise HTTPException(status_code=400, detail="Page size must be between 1 and 100")
 
     try:
-        extractions = db_manager.get_all_extractions()
+        result = db_manager.get_all_extractions(page=page, page_size=page_size)
         return JSONResponse(
             status_code=200,
             content={
                 "message": "Extractions retrieved successfully",
-                "extractions": extractions,
-                "total": len(extractions)
+                "extractions": result["extractions"],
+                "pagination": result["pagination"]
             }
         )
     except Exception as e:
