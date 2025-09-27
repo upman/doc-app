@@ -1,5 +1,11 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Screenshots
+
+![Application Screenshot 1](./assets/screenshots/screenshot1.png)
+
+![Application Screenshot 2](./assets/screenshots/screenshot2.png)
+
 ## Local dev
 - Setup .env files
 ```
