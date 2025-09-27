@@ -7,7 +7,7 @@ import styles from './extractions.module.css';
 interface QuestionResult {
   question: string;
   answer: string;
-  confidence: number | null;
+  confidence: string | number | null;  // Updated to handle both string and number
   created_at: string;
 }
 
@@ -104,19 +104,27 @@ export default function ExtractionsPage() {
     }
   };
 
-  const formatConfidence = (confidence: number | null | undefined): string => {
-    if (confidence === null || confidence === undefined || isNaN(confidence)) {
+  const formatConfidence = (confidence: string | number | null | undefined): string => {
+    if (confidence === null || confidence === undefined) {
       return 'N/A';
     }
 
-    // Handle confidence as a decimal (0-1) or percentage (0-100)
-    let confidenceValue = confidence;
-    if (confidence <= 1) {
-      // Assume it's a decimal, convert to percentage
-      confidenceValue = confidence * 100;
+    // If confidence is a string (like "high", "medium", "low"), return it as-is with proper capitalization
+    if (typeof confidence === 'string') {
+      return confidence.charAt(0).toUpperCase() + confidence.slice(1).toLowerCase();
     }
 
-    return `${confidenceValue.toFixed(1)}%`;
+    // Handle confidence as a decimal (0-1) or percentage (0-100) for numeric values
+    if (typeof confidence === 'number' && !isNaN(confidence)) {
+      let confidenceValue = confidence;
+      if (confidence <= 1) {
+        // Assume it's a decimal, convert to percentage
+        confidenceValue = confidence * 100;
+      }
+      return `${confidenceValue.toFixed(1)}%`;
+    }
+
+    return 'N/A';
   };
 
   const getStatusBadge = (status: string) => {
