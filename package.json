@@ -1,0 +1,27 @@
+{
+  "name": "doc-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "dev:staging": "cp .env.staging .env.local && next dev",
+    "build": "next build",
+    "build:staging": "cp .env.staging .env.local && next build",
+    "build:production": "cp .env.production .env.local && next build",
+    "start": "next start",
+    "start:staging": "cp .env.staging .env.local && next start",
+    "start:production": "cp .env.production .env.local && next start"
+  },
+  "dependencies": {
+    "@next/env": "^15.5.4",
+    "next": "15.5.4",
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "^5"
+  }
+}
