@@ -62,7 +62,7 @@ export default function Home() {
 
         {/* File Upload Form */}
         <div style={{ margin: '2rem 0', padding: '1rem', border: '1px solid #ccc', borderRadius: '8px', background: '#f9f9f9' }}>
-          <h2 style={{ marginBottom: '1rem', color: "black" }}>Upload Document: {env.LOCAL_ONLY}</h2>
+          <h2 style={{ marginBottom: '1rem', color: "black" }}>Upload Document</h2>
           <div style={{ marginBottom: '1rem' }}>
             <input
               type="file"

@@ -12,7 +12,6 @@ export enum Environment {
 export const env = {
   // Backend configuration
   backendHost: process.env.NEXT_PUBLIC_BACKEND_HOST || process.env.BACKEND_HOST || 'http://localhost:8000',
-  LOCAL_ONLY: process.env.LOCAL_ONLY,
   // Environment info
   isDevelopment: process.env.NODE_ENV === 'development',
   isProduction: process.env.NODE_ENV === 'production',
