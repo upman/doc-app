@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import logging
@@ -7,6 +7,7 @@ import uvicorn
 import os
 import json
 from pathlib import Path
+import asyncio
 
 from .settings import settings, Environment
 from .anthropic_service import anthropic_files_service
@@ -46,6 +47,75 @@ logger.info(f"CORS origins: {settings.cors_origins}")
 # Ensure data directory exists
 settings.ensure_data_directory()
 
+async def process_document_background(extraction_id: int, file_path: Path, questions: List[str]):
+    """
+    Background task to process document with docling and anthropic
+    """
+    logger.info(f"🔄 Starting background processing for extraction ID: {extraction_id}")
+    logger.info(f"   File: {file_path}")
+    logger.info(f"   Questions: {len(questions)}")
+
+    try:
+        # Update status to processing
+        db_manager.update_extraction_status(extraction_id, "processing")
+        logger.info(f"   Status updated to 'processing'")
+
+        # Process document to convert to markdown and answer questions
+        document_info = await document_processing_service.process_document(
+            file_path=file_path,
+            questions=questions
+        )
+        logger.info(f"   Document processing completed")
+        logger.info(f"   Markdown length: {document_info.get('markdown_length', 0)} characters")
+
+        # Extract results
+        markdown_content = document_info.get('markdown_content')
+        answers_data = document_info.get('answers')
+        error = document_info.get('error')
+
+        if error:
+            logger.error(f"   ❌ Document processing error: {error}")
+            db_manager.update_extraction_status(extraction_id, "failed")
+            return
+
+        # Update extraction with markdown content
+        if markdown_content:
+            db_manager.update_extraction_status(extraction_id, "completed", markdown_content)
+            logger.info(f"   ✅ Markdown content saved to database")
+        else:
+            logger.warning(f"   ⚠️ No markdown content generated")
+
+        # Save question results if available
+        if answers_data and isinstance(answers_data, dict) and "answers" in answers_data:
+            logger.info(f"   💾 Saving {len(answers_data['answers'])} question results")
+            for answer in answers_data["answers"]:
+                question = answer.get("question", "")
+                answer_text = answer.get("answer", "")
+                confidence = answer.get("confidence")
+
+                if question and answer_text:
+                    result_id = db_manager.create_question_result(
+                        extraction_id=extraction_id,
+                        question=question,
+                        answer=answer_text,
+                        confidence=confidence
+                    )
+                    logger.info(f"     - Saved result ID {result_id}: {question[:50]}...")
+        elif answers_data and isinstance(answers_data, dict) and "error" in answers_data:
+            logger.error(f"   ❌ Question answering error: {answers_data['error']}")
+        else:
+            logger.info(f"   ℹ️ No questions were provided or answered")
+
+        logger.info(f"✅ Background processing completed successfully for extraction ID: {extraction_id}")
+
+    except Exception as e:
+        logger.error(f"❌ Background processing failed for extraction ID {extraction_id}: {str(e)}")
+        logger.error(f"   Error details: {type(e).__name__}: {str(e)}")
+        try:
+            db_manager.update_extraction_status(extraction_id, "failed")
+        except Exception as db_error:
+            logger.error(f"   Failed to update status to 'failed': {str(db_error)}")
+
 # Initialize database on startup
 @app.on_event("startup")
 async def startup_event():
@@ -78,15 +148,17 @@ async def health_check():
 
 @app.post("/documents/upload")
 async def upload_document(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     title: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
     questions: Optional[str] = Form(None)
 ):
     """
-    Upload a document with optional form data and questions
+    Upload a document with optional form data and questions.
+    Returns immediately after file is saved, then processes in background.
     """
-    logger.info(f"Received file upload request:")
+    logger.info(f"📤 Received file upload request:")
     logger.info(f"  - Filename: {file.filename}")
     logger.info(f"  - Content Type: {file.content_type}")
     logger.info(f"  - Size: {file.size if hasattr(file, 'size') else 'Unknown'}")
@@ -132,57 +204,61 @@ async def upload_document(
     logger.info(f"  - File content length: {len(content)} bytes")
 
     # Create file path using settings
+    # TODO: Handle duplicate filenames - for now just overwrite
     file_path = settings.data_path / file.filename
 
     # Save file to local data directory
-    with open(file_path, "wb") as f:
-        f.write(content)
-
-    logger.info(f"  - File saved locally to: {file_path}")
-
-    # Try to upload to Anthropic Files API
-    anthropic_file_info = None
     try:
-        if anthropic_files_service.is_enabled():
-            anthropic_file_info = await anthropic_files_service.upload_file(
-                file_content=content,
-                filename=file.filename,
-                content_type=file.content_type or "application/octet-stream"
-            )
-            if anthropic_file_info:
-                logger.info(f"  - File uploaded to Anthropic API with ID: {anthropic_file_info['file_id']}")
-        else:
-            logger.info("  - Anthropic API not configured, file only saved locally")
+        with open(file_path, "wb") as f:
+            f.write(content)
+        logger.info(f"  - ✅ File saved locally to: {file_path}")
     except Exception as e:
-        logger.error(f"  - Failed to upload to Anthropic API: {str(e)}")
-        # Continue even if Anthropic upload fails - we still have local file
+        logger.error(f"  - ❌ Failed to save file: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
 
-    # Reset file position for potential future reads
-    await file.seek(0)
+    # Create extraction record in database
+    try:
+        extraction_id = db_manager.create_extraction(
+            file_path=str(file_path),
+            filename=file.filename,
+            file_size=len(content),
+            questions=parsed_questions
+        )
+        logger.info(f"  - ✅ Created extraction record with ID: {extraction_id}")
+    except Exception as e:
+        logger.error(f"  - ❌ Failed to create extraction record: {str(e)}")
+        # Clean up the saved file
+        try:
+            file_path.unlink()
+        except:
+            pass
+        raise HTTPException(status_code=500, detail=f"Failed to create extraction record: {str(e)}")
 
-    # Process document to convert to markdown and answer questions
-    document_info = await document_processing_service.process_document(
+    # Start background processing
+    background_tasks.add_task(
+        process_document_background,
+        extraction_id=extraction_id,
         file_path=file_path,
         questions=parsed_questions
     )
+    logger.info(f"  - 🚀 Background processing task queued for extraction ID: {extraction_id}")
 
-    # Build response with Anthropic file info if available
+    # Return immediate response
     response_data = {
-        "message": "Document uploaded successfully",
+        "message": "File uploaded successfully and will be processed shortly",
+        "extraction_id": extraction_id,
         "filename": file.filename,
         "content_type": file.content_type,
         "title": title,
         "description": description,
         "questions": parsed_questions,
-        "id": "stub_document_id",
         "file_size": len(content),
         "local_path": str(file_path),
-        "document_info": document_info
+        "status": "pending",
+        "processing_info": "Document processing (markdown conversion and question answering) has been queued and will complete in the background. Check the extraction status using the extraction_id."
     }
 
-    if anthropic_file_info:
-        response_data["anthropic_file"] = anthropic_file_info
-
+    logger.info(f"📤 Upload completed - returning immediate response for extraction ID: {extraction_id}")
     return JSONResponse(
         status_code=200,
         content=response_data

@@ -46,20 +46,43 @@ class DatabaseManager:
             conn.executescript(migration_sql)
             conn.commit()
 
-    def create_extraction(self, file_path: str, questions: List[str]) -> int:
+    def create_extraction(self, file_path: str, filename: str, file_size: int, questions: List[str]) -> int:
         """Create a new extraction record and return its ID"""
         with self.get_connection() as conn:
             cursor = conn.execute(
                 """
-                INSERT INTO extractions (file_path, questions, created_at, updated_at)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO extractions (file_path, filename, file_size, questions, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, 'pending', ?, ?)
                 """,
-                (file_path, json.dumps(questions), datetime.utcnow(), datetime.utcnow())
+                (file_path, filename, file_size, json.dumps(questions), datetime.utcnow(), datetime.utcnow())
             )
             extraction_id = cursor.lastrowid
             if extraction_id is None:
                 raise RuntimeError("Failed to create extraction: no ID returned")
             return extraction_id
+
+    def update_extraction_status(self, extraction_id: int, status: str, markdown_content: Optional[str] = None) -> None:
+        """Update extraction status and optionally markdown content"""
+        with self.get_connection() as conn:
+            if markdown_content:
+                conn.execute(
+                    """
+                    UPDATE extractions
+                    SET status = ?, markdown_content = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (status, markdown_content, datetime.utcnow(), extraction_id)
+                )
+            else:
+                conn.execute(
+                    """
+                    UPDATE extractions
+                    SET status = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (status, datetime.utcnow(), extraction_id)
+                )
+            conn.commit()
 
     def create_question_result(self, extraction_id: int, question: str, answer: str, confidence: Optional[float] = None) -> int:
         """Create a question result record and return its ID"""
@@ -82,7 +105,7 @@ class DatabaseManager:
             # Get extractions
             extractions_cursor = conn.execute(
                 """
-                SELECT id, file_path, questions, created_at, updated_at
+                SELECT id, file_path, filename, file_size, questions, status, markdown_content, created_at, updated_at
                 FROM extractions
                 ORDER BY created_at DESC
                 """
@@ -93,7 +116,11 @@ class DatabaseManager:
                 extraction = {
                     "id": row["id"],
                     "file_path": row["file_path"],
+                    "filename": row["filename"],
+                    "file_size": row["file_size"],
                     "questions": json.loads(row["questions"]) if row["questions"] else [],
+                    "status": row["status"],
+                    "markdown_content": row["markdown_content"],
                     "created_at": row["created_at"],
                     "updated_at": row["updated_at"],
                     "results": []
