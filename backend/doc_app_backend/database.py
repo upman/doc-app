@@ -1,0 +1,135 @@
+"""
+Database models and connection handling for SQLite
+"""
+import sqlite3
+import logging
+from typing import List, Dict, Any, Optional
+from pathlib import Path
+from datetime import datetime
+import json
+
+from .settings import settings
+
+logger = logging.getLogger(__name__)
+
+
+class DatabaseManager:
+    """Manages SQLite database connections and operations"""
+
+    def __init__(self):
+        self._db_path = self._get_db_path()
+
+    def _get_db_path(self) -> Path:
+        """Get the database file path from settings"""
+        if settings.database_url:
+            # Extract path from sqlite:///./path format
+            if settings.database_url.startswith("sqlite:///"):
+                db_path = settings.database_url[len("sqlite:///"):]
+                if db_path.startswith("./"):
+                    # Relative path - make it relative to backend directory
+                    return Path(__file__).parent.parent / db_path[2:]
+                else:
+                    return Path(db_path)
+
+        # Fallback to default path
+        return Path(__file__).parent.parent / settings.database_name
+
+    def get_connection(self) -> sqlite3.Connection:
+        """Get a database connection with proper configuration"""
+        conn = sqlite3.connect(str(self._db_path))
+        conn.row_factory = sqlite3.Row  # Enable dict-like access to rows
+        return conn
+
+    def execute_migration(self, migration_sql: str) -> None:
+        """Execute a migration SQL script"""
+        with self.get_connection() as conn:
+            conn.executescript(migration_sql)
+            conn.commit()
+
+    def create_extraction(self, file_path: str, questions: List[str]) -> int:
+        """Create a new extraction record and return its ID"""
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO extractions (file_path, questions, created_at, updated_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (file_path, json.dumps(questions), datetime.utcnow(), datetime.utcnow())
+            )
+            extraction_id = cursor.lastrowid
+            if extraction_id is None:
+                raise RuntimeError("Failed to create extraction: no ID returned")
+            return extraction_id
+
+    def create_question_result(self, extraction_id: int, question: str, answer: str, confidence: Optional[float] = None) -> int:
+        """Create a question result record and return its ID"""
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO question_results (extraction_id, question, answer, confidence, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (extraction_id, question, answer, confidence, datetime.utcnow())
+            )
+            result_id = cursor.lastrowid
+            if result_id is None:
+                raise RuntimeError("Failed to create question result: no ID returned")
+            return result_id
+
+    def get_all_extractions(self) -> List[Dict[str, Any]]:
+        """Get all extractions with their question results"""
+        with self.get_connection() as conn:
+            # Get extractions
+            extractions_cursor = conn.execute(
+                """
+                SELECT id, file_path, questions, created_at, updated_at
+                FROM extractions
+                ORDER BY created_at DESC
+                """
+            )
+            extractions = []
+
+            for row in extractions_cursor:
+                extraction = {
+                    "id": row["id"],
+                    "file_path": row["file_path"],
+                    "questions": json.loads(row["questions"]) if row["questions"] else [],
+                    "created_at": row["created_at"],
+                    "updated_at": row["updated_at"],
+                    "results": []
+                }
+
+                # Get question results for this extraction
+                results_cursor = conn.execute(
+                    """
+                    SELECT question, answer, confidence, created_at
+                    FROM question_results
+                    WHERE extraction_id = ?
+                    ORDER BY created_at ASC
+                    """,
+                    (row["id"],)
+                )
+
+                for result_row in results_cursor:
+                    extraction["results"].append({
+                        "question": result_row["question"],
+                        "answer": result_row["answer"],
+                        "confidence": result_row["confidence"],
+                        "created_at": result_row["created_at"]
+                    })
+
+                extractions.append(extraction)
+
+            return extractions
+
+    def get_extraction_by_id(self, extraction_id: int) -> Optional[Dict[str, Any]]:
+        """Get a specific extraction by ID"""
+        extractions = self.get_all_extractions()
+        for extraction in extractions:
+            if extraction["id"] == extraction_id:
+                return extraction
+        return None
+
+
+# Global database manager instance
+db_manager = DatabaseManager()
